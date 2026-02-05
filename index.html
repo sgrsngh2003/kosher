@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -12,22 +12,82 @@
             margin: 0;
             padding: 0;
             background-color: #333;
-            overflow: hidden; /* Hide scrollbars */
+            overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            /* CRITICAL FIX: Disables default touch actions (scrolling/panning) on the whole body */
+            touch-action: none; 
+            user-select: none;
+            -webkit-user-select: none;
         }
         #gameCanvas {
-            display: block; /* Remove default inline spacing */
-            width: 100vw;   /* 100% of viewport width */
-            height: 100vh;  /* 100% of viewport height */
+            display: block;
+            width: 100vw;
+            height: 100vh;
             background-image: url('/back.png'); 
             background-size: cover;
             background-position: center;
+        }
+
+        /* --- MOBILE CONTROLS STYLING --- */
+        .controls-overlay {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            height: 120px;
+            pointer-events: none; /* Let touches pass through empty spaces */
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-sizing: border-box;
+            z-index: 100;
+        }
+
+        /* Only show controls on touch devices or small screens */
+        @media (min-width: 1024px) {
+            .controls-overlay { display: none; }
+        }
+
+        .d-pad, .action-btn {
+            pointer-events: auto; /* Re-enable pointer events for buttons */
+            display: flex;
+            gap: 20px;
+        }
+
+        .control-btn {
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            touch-action: none;
+            backdrop-filter: blur(4px);
+        }
+
+        .control-btn:active {
+            background: rgba(255, 255, 255, 0.5);
+            transform: scale(0.95);
         }
     </style>
 </head>
 <body>
 
 <canvas id="gameCanvas"></canvas>
+
+<div class="controls-overlay">
+    <div class="d-pad">
+        <div class="control-btn" id="btn-left">◀</div>
+        <div class="control-btn" id="btn-right">▶</div>
+    </div>
+    <div class="action-btn">
+        <div class="control-btn" id="btn-jump" style="background: rgba(255, 200, 0, 0.3);">▲</div>
+    </div>
+</div>
 
 <script>
 // ===========================
@@ -43,23 +103,16 @@ winnerImage.src = "1.png";
 let GAME_WIDTH = window.innerWidth;
 let GAME_HEIGHT = window.innerHeight;
 
-// Function to handle window resizing
 function resizeCanvas() {
     GAME_WIDTH = window.innerWidth;
     GAME_HEIGHT = window.innerHeight;
     canvas.width = GAME_WIDTH;
     canvas.height = GAME_HEIGHT;
-    
-    // Optional: If game is running, you might want to reposition the player 
-    // if they fall off screen due to resize, but for now simple resize is fine.
 }
 
-// Set initial size
+// Initial setup
 resizeCanvas();
-
-// Listen for window resize events
 window.addEventListener('resize', resizeCanvas);
-
 
 const STATE = {
     START: 0,
@@ -69,13 +122,13 @@ const STATE = {
 };
 let currentState = STATE.START;
 
-// Tuned Physics Constants
 const GRAVITY = 0.5;
 const FRICTION = 0.8; 
 
 let score = 0;
 let cameraX = 0;
 
+// Centralized Input State
 const keys = {
     right: false,
     left: false,
@@ -83,11 +136,22 @@ const keys = {
     space: false
 };
 
+// ===========================
+// INPUT HANDLING (DESKTOP + MOBILE)
+// ===========================
+
+// 1. Desktop Keyboard Support
 document.addEventListener('keydown', (e) => {
+    // Prevent scrolling with arrow keys
+    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.code) > -1) {
+        e.preventDefault();
+    }
+
     if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
     if (e.code === 'ArrowUp' || e.code === 'KeyW') keys.up = true;
 
+    // Handle Game State Transitions via Enter
     if ((currentState === STATE.GAMEOVER || currentState === STATE.WIN) && e.code === 'Enter') {
         resetGame();
     }
@@ -103,26 +167,49 @@ document.addEventListener('keyup', (e) => {
     if (e.code === 'Space') keys.space = false;
 });
 
+// 2. Mobile Touch Support
+// We attach listeners to the HTML elements we created in the body
+function attachTouch(elementId, key) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+
+    // Touch Start -> Key Down
+    el.addEventListener('touchstart', (e) => {
+        e.preventDefault(); // Stop mouse emulation
+        keys[key] = true;
+        
+        // Handle Start/Restart Logic on Mobile via Jump Button
+        if (key === 'up') {
+            if (currentState === STATE.START) currentState = STATE.PLAYING;
+            if (currentState === STATE.GAMEOVER || currentState === STATE.WIN) resetGame();
+        }
+    }, { passive: false });
+
+    // Touch End -> Key Up
+    el.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        keys[key] = false;
+    }, { passive: false });
+}
+
+attachTouch('btn-left', 'left');
+attachTouch('btn-right', 'right');
+attachTouch('btn-jump', 'up');
+
+
 // ===========================
 // LOAD IMAGES
 // ===========================
-
-// 1. Load Player Images (Ensure files are named correctly!)
 const playerLeftImg = new Image();
 playerLeftImg.src = "left.png"; 
 
 const playerRightImg = new Image();
 playerRightImg.src = "right.png";
 
-// 2. Load Goal Image
 const goalImage = new Image();
 goalImage.src = "Shri-Ajab-3D-Jaipuri-Mixture.png";
 
-// 3. Enemy packet images
-const enemyImageUrls = [
-    "2.png", "3.png", "4.png", "5.png",
-];
-
+const enemyImageUrls = ["2.png", "3.png", "4.png", "5.png"];
 const enemyImages = enemyImageUrls.map(url => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -138,25 +225,18 @@ class Player {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-
-        // SIZE: Adjust these numbers if your image looks stretched!
         this.width = 63;
         this.height = 112;
-
         this.velX = 0;
         this.velY = 0;
-        
-        // Physics variables
         this.maxSpeed = 8;       
         this.acceleration = 1.0; 
         this.jumpStrength = -13;
-        
         this.grounded = false;
         this.facingRight = true;
     }
 
     update() {
-        // Acceleration
         if (keys.right) {
             if (this.velX < this.maxSpeed) this.velX += this.acceleration;
             this.facingRight = true;
@@ -166,11 +246,9 @@ class Player {
             this.facingRight = false;
         }
 
-        // Friction
         this.velX *= FRICTION;
         if (Math.abs(this.velX) < 0.1) this.velX = 0;
 
-        // Jumping
         if (keys.up && this.grounded) {
             this.velY = this.jumpStrength;
             this.grounded = false;
@@ -180,7 +258,6 @@ class Player {
         this.x += this.velX;
         this.y += this.velY;
 
-        // Death Floor (Dynamic based on GAME_HEIGHT)
         if (this.y > GAME_HEIGHT + 100) {
             currentState = STATE.GAMEOVER;
         }
@@ -188,27 +265,21 @@ class Player {
 
     draw(cameraOffset) {
         const drawX = this.x - cameraOffset;
-        
-        // 1. Pick the image based on direction
         let imgToDraw = this.facingRight ? playerRightImg : playerLeftImg;
-
-        // 2. Add a simple "bobbing" effect when running
+        
         let bob = 0;
         if (Math.abs(this.velX) > 0.5 && this.grounded) {
              bob = Math.sin(Date.now() / 100) * 3;
         }
 
-        // 3. Draw the Shadow
         ctx.fillStyle = "rgba(0,0,0,0.2)";
         ctx.beginPath();
         ctx.ellipse(drawX + this.width/2, this.y + this.height - 2, 15, 5, 0, 0, Math.PI*2);
         ctx.fill();
 
-        // 4. Draw the Character Image
         if (imgToDraw.complete && imgToDraw.naturalHeight !== 0) {
             ctx.drawImage(imgToDraw, drawX, this.y + bob, this.width, this.height);
         } else {
-            // Fallback Red Box (only if image isn't found)
             ctx.fillStyle = "red";
             ctx.fillRect(drawX, this.y, this.width, this.height);
         }
@@ -217,10 +288,7 @@ class Player {
 
 class Platform {
     constructor(x, y, width, height) {
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
+        this.x = x; this.y = y; this.width = width; this.height = height;
     }
 
     draw(cameraOffset) {
@@ -229,7 +297,6 @@ class Platform {
         ctx.shadowBlur = 10;
         ctx.shadowOffsetX = 6;
         ctx.shadowOffsetY = 6;
-
         ctx.fillStyle = "#5086b4";
         ctx.fillRect(this.x - cameraOffset, this.y, this.width, this.height);
         ctx.restore(); 
@@ -252,14 +319,10 @@ class Platform {
 
 class Enemy {
     constructor(x, y, range) {
-        this.x = x;
-        this.y = y;
-        this.width = 70;
-        this.height = 70;
-        this.startX = x;
-        this.range = range;
-        this.speed = 2;
-        this.direction = 1;
+        this.x = x; this.y = y;
+        this.width = 70; this.height = 70;
+        this.startX = x; this.range = range;
+        this.speed = 2; this.direction = 1;
         this.markedForDeletion = false;
         this.image = enemyImages[Math.floor(Math.random() * enemyImages.length)];
     }
@@ -273,7 +336,6 @@ class Enemy {
 
     draw(cameraOffset) {
         let drawX = this.x - cameraOffset;
-        
         if (this.image.complete && this.image.naturalHeight !== 0) {
             ctx.drawImage(this.image, drawX, this.y, this.width, this.height);
         } else {
@@ -282,41 +344,30 @@ class Enemy {
             ctx.fillStyle = "#FFF";
             ctx.font = "bold 10px Arial";
             ctx.textAlign = "center";
-            ctx.fillText("OTHER BRAND", drawX + this.width/2, this.y + this.height/2);
+            ctx.fillText("BRAND", drawX + this.width/2, this.y + this.height/2);
             ctx.textAlign = "left";
         }
     }
 }
+
 class ShriAjabGoal {
     constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.width = 60;
-        this.height = 40;
+        this.x = x; this.y = y;
+        this.width = 60; this.height = 40;
     }
     
     draw(cameraOffset) {
         let drawX = this.x - cameraOffset;
-        
         if (goalImage.complete && goalImage.naturalHeight !== 0) {
             ctx.drawImage(goalImage, drawX, this.y, this.width, this.height);
         } else {
             ctx.fillStyle = "transparent";
             ctx.fillRect(drawX, this.y, this.width, this.height);
-            ctx.fillStyle = "transparent";
-            ctx.fillRect(drawX, this.y + 10, this.width, 20);
         }
         
         let logoTopY = this.y - 40;
-
         if (winnerImage.complete && winnerImage.naturalHeight !== 0) {
-            ctx.drawImage(
-                winnerImage,
-                drawX - 10,
-                logoTopY,
-                80,
-                80
-            );
+            ctx.drawImage(winnerImage, drawX - 10, logoTopY, 80, 80);
         }
 
         ctx.save(); 
@@ -329,6 +380,7 @@ class ShriAjabGoal {
         ctx.restore();
     }
 }
+
 class Decoration {
     constructor(x, y, type) {
         this.x = x; this.y = y; this.type = type;
@@ -345,43 +397,35 @@ class Decoration {
     }
 }
 
-
+// ===========================
+// Game Logic
+// ===========================
 
 let player;
 let platforms = [];
 let enemies = [];
-let projectiles = [];
 let decorations = [];
 let goal;
 
 function initGame() {
     score = 0;
     cameraX = 0;
-    
-    
     let groundY = GAME_HEIGHT - 40;
     
     player = new Player(100, groundY - 150);
-    projectiles = [];
-    
-    
     
     platforms = [
-        // Ground Floor
         new Platform(0, groundY, 1000, 40),
         new Platform(1100, groundY, 800, 40),
         new Platform(2000, groundY, 1000, 40),
         
-        // Tier 1 (Low)
         new Platform(300, groundY - 150, 150, 30),
         new Platform(700, groundY - 80, 150, 30),
         
-        // Tier 2 (Mid)
         new Platform(500, groundY - 160, 150, 30),
         new Platform(1200, groundY - 110, 200, 30),
         new Platform(1800, groundY - 110, 150, 30),
         
-        // Tier 3 (High)
         new Platform(1500, groundY - 210, 200, 30),
         new Platform(2200, groundY - 110, 100, 30),
         new Platform(2400, groundY - 210, 100, 30),
@@ -395,10 +439,6 @@ function initGame() {
         new Enemy(2100, groundY - 70, 300)
     ];
     
-    decorations = [
-
-    ];
-
     goal = new ShriAjabGoal(2750, groundY - 350);
 }
 
@@ -421,17 +461,14 @@ function update() {
 
     player.update();
     
-    // --- PLATFORM COLLISION LOGIC ---
     player.grounded = false;
     for (const plat of platforms) {
         if (checkCollision(player, plat)) {
-            // Landing on top
             if (player.velY > 0 && player.y + player.height - player.velY <= plat.y) {
                 player.grounded = true;
                 player.velY = 0;
                 player.y = plat.y - player.height;
             }
-            // Hitting head on bottom
             else if (player.velY < 0 && player.y - player.velY >= plat.y + plat.height) {
                  player.velY = 0;
                  player.y = plat.y + plat.height;
@@ -439,7 +476,6 @@ function update() {
         }
     }
     
-    // Side collision with platforms
     for (const plat of platforms) {
         if (checkCollision(player, plat)) {
             if(player.velX > 0 && player.x + player.width - player.velX <= plat.x) {
@@ -455,7 +491,6 @@ function update() {
 
     enemies.forEach(e => e.update());
 
-    // --- LOGIC: Touch to Collect ---
     enemies.forEach(enemy => {
         if (!enemy.markedForDeletion && checkCollision(player, enemy)) {
             enemy.markedForDeletion = true;
@@ -463,17 +498,13 @@ function update() {
         }
     });
     
-    // Win condition
     if(checkCollision(player, goal)) {
         currentState = STATE.WIN;
         score += 1000;
     }
 
-    // Cleanup deleted enemies
     enemies = enemies.filter(e => !e.markedForDeletion);
 
-    // SMOOTH CAMERA LOGIC
-    // Keep player in the middle-left of the screen
     let targetCameraX = player.x - GAME_WIDTH * 0.3; 
     if(targetCameraX < 0) targetCameraX = 0;
     cameraX += (targetCameraX - cameraX) * 0.1;
@@ -496,6 +527,7 @@ function drawOverlay(title, subtitle) {
     
     ctx.fillStyle = "#FFF";
     ctx.font = "20px Arial";
+    // Modified subtitle to include mobile instruction
     ctx.fillText(subtitle, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30);
     ctx.textAlign = "left";
 }
@@ -504,7 +536,7 @@ function draw() {
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
     if (currentState === STATE.START) {
-        drawOverlay("ADVENTURE WITH KOKO", "Press ENTER to Start. Controls: Arrows to Move & Jump.");
+        drawOverlay("ADVENTURE WITH KOKO", "Press Enter or Tap Jump to Start");
         return;
     }
 
@@ -517,9 +549,9 @@ function draw() {
     drawUI();
 
     if (currentState === STATE.GAMEOVER) {
-        drawOverlay("GAME OVER", "You fell off! Press ENTER to restart.");
+        drawOverlay("GAME OVER", "Tap Jump to Restart");
     } else if (currentState === STATE.WIN) {
-        drawOverlay("", "Final Score: " + score);
+        drawOverlay("YOU WIN", "Final Score: " + score + " - Tap Jump to Restart");
     }
 }
 
