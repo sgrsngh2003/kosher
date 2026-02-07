@@ -11,9 +11,10 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #222;
+            background-color: #333;
             overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            /* CRITICAL FIX: Disables default touch actions (scrolling/panning) on the whole body */
             touch-action: none; 
             user-select: none;
             -webkit-user-select: none;
@@ -27,185 +28,164 @@
             background-position: center;
         }
 
-        /* --- UI LAYER --- */
-        #ui-layer {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none;
-        }
-
-        /* --- ORIENTATION WARNING (MOBILE ONLY) --- */
-        #orientation-warning {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: #111;
-            z-index: 9999;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            text-align: center;
-            pointer-events: auto;
-        }
-
-        /* --- MOBILE CONTROLS --- */
+        /* --- MOBILE CONTROLS STYLING --- */
         .controls-overlay {
             position: absolute;
             bottom: 20px;
             width: 100%;
-            display: none; /* Hidden by default (Desktop first) */
+            height: 120px;
+            pointer-events: none; /* Let touches pass through empty spaces */
+            display: flex;
             justify-content: space-between;
-            align-items: flex-end;
-            padding: 20px 40px;
+            padding: 0 20px;
             box-sizing: border-box;
-            pointer-events: none;
+            z-index: 100;
+        }
+
+        /* Only show controls on touch devices or small screens */
+        @media (min-width: 1024px) {
+            .controls-overlay { display: none; }
         }
 
         .d-pad, .action-btn {
-            pointer-events: auto;
+            pointer-events: auto; /* Re-enable pointer events for buttons */
             display: flex;
             gap: 20px;
         }
 
         .control-btn {
-            width: 80px; height: 80px;
-            background: rgba(255, 255, 255, 0.15);
-            border: 2px solid rgba(255, 255, 255, 0.4);
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
             border-radius: 50%;
             color: white;
             font-size: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
+            user-select: none;
+            touch-action: none;
             backdrop-filter: blur(4px);
         }
-        
-        .control-btn:active {
-            background: rgba(255, 255, 255, 0.4);
-            transform: scale(0.95);
-        }
 
-        /* --- CRITICAL: DEVICE DETECTION --- */
-        
-        /* If the device has a "coarse" pointer (Touchscreen), show controls */
-        @media (pointer: coarse) {
-            .controls-overlay { display: flex; }
-            
-            /* Only show orientation warning on TOUCH devices in PORTRAIT */
-            @media (orientation: portrait) {
-                #orientation-warning { display: flex; }
-                #gameCanvas { display: none; }
-                .controls-overlay { display: none; }
-            }
+        .control-btn:active {
+            background: rgba(255, 255, 255, 0.5);
+            transform: scale(0.95);
         }
     </style>
 </head>
 <body>
 
-<div id="orientation-warning">
-    <h1>⚠ PLEASE ROTATE ⚠</h1>
-    <p>Landscape Mode Required</p>
-    <div style="font-size: 40px; margin-top: 20px;">🔄</div>
-</div>
-
 <canvas id="gameCanvas"></canvas>
 
-<div id="ui-layer">
-    <div class="controls-overlay">
-        <div class="d-pad">
-            <div class="control-btn" id="btn-left">◀</div>
-            <div class="control-btn" id="btn-right">▶</div>
-        </div>
-        <div class="action-btn">
-            <div class="control-btn" id="btn-jump" style="background: rgba(255, 200, 0, 0.3);">▲</div>
-        </div>
+<div class="controls-overlay">
+    <div class="d-pad">
+        <div class="control-btn" id="btn-left">◀</div>
+        <div class="control-btn" id="btn-right">▶</div>
+    </div>
+    <div class="action-btn">
+        <div class="control-btn" id="btn-jump" style="background: rgba(255, 200, 0, 0.3);">▲</div>
     </div>
 </div>
 
 <script>
 // ===========================
-// CORE SETUP
+// Game Setup & Globals
 // ===========================
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
+const winnerImage = new Image();
+winnerImage.src = "1.png";
+
+// --- DYNAMIC RESOLUTION SETUP ---
 let GAME_WIDTH = window.innerWidth;
 let GAME_HEIGHT = window.innerHeight;
 
-// Game State
-const STATE = { START: 0, PLAYING: 1, GAMEOVER: 2, WIN: 3 };
-let currentState = STATE.START;
-
-// Physics
-const GRAVITY = 0.5;
-const FRICTION = 0.8; 
-let score = 0;
-let cameraX = 0;
-
-// Inputs
-const keys = { right: false, left: false, up: false };
-
-// ===========================
-// RESIZE & INIT LOGIC
-// ===========================
-
 function resizeCanvas() {
-    // Only re-init if dimensions change significantly (avoids mobile URL bar jitter)
-    if (Math.abs(window.innerWidth - GAME_WIDTH) < 20 && Math.abs(window.innerHeight - GAME_HEIGHT) < 20) return;
-
     GAME_WIDTH = window.innerWidth;
     GAME_HEIGHT = window.innerHeight;
     canvas.width = GAME_WIDTH;
     canvas.height = GAME_HEIGHT;
-    
-    // If the game is already running, we just update bounds. 
-    // If it's START/GAMEOVER, we re-init to place floor correctly.
-    if(currentState !== STATE.PLAYING) {
-        initGame();
-    }
 }
 
-// Initial Call
+// Initial setup
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
+const STATE = {
+    START: 0,
+    PLAYING: 1,
+    GAMEOVER: 2,
+    WIN: 3
+};
+let currentState = STATE.START;
+
+const GRAVITY = 0.5;
+const FRICTION = 0.8; 
+
+let score = 0;
+let cameraX = 0;
+
+// Centralized Input State
+const keys = {
+    right: false,
+    left: false,
+    up: false,
+    space: false
+};
 
 // ===========================
-// INPUT HANDLERS
+// INPUT HANDLING (DESKTOP + MOBILE)
 // ===========================
 
-// --- DESKTOP (KEYBOARD) ---
-window.addEventListener('keydown', (e) => {
-    // Prevent default scrolling for game keys
-    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight", "Space"].includes(e.code)) {
+// 1. Desktop Keyboard Support
+document.addEventListener('keydown', (e) => {
+    // Prevent scrolling with arrow keys
+    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.code) > -1) {
         e.preventDefault();
     }
 
     if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
-    if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space') keys.up = true;
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') keys.up = true;
 
-    handleGlobalInput();
+    // Handle Game State Transitions via Enter
+    if ((currentState === STATE.GAMEOVER || currentState === STATE.WIN) && e.code === 'Enter') {
+        resetGame();
+    }
+    if (currentState === STATE.START && e.code === 'Enter') {
+        currentState = STATE.PLAYING;
+    }
 });
 
-window.addEventListener('keyup', (e) => {
+document.addEventListener('keyup', (e) => {
     if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
-    if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space') keys.up = false;
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') keys.up = false;
+    if (e.code === 'Space') keys.space = false;
 });
 
-// --- MOBILE (TOUCH) ---
-function attachTouch(id, key) {
-    const el = document.getElementById(id);
+// 2. Mobile Touch Support
+// We attach listeners to the HTML elements we created in the body
+function attachTouch(elementId, key) {
+    const el = document.getElementById(elementId);
     if (!el) return;
 
+    // Touch Start -> Key Down
     el.addEventListener('touchstart', (e) => {
-        e.preventDefault(); // Prevent ghost clicks
+        e.preventDefault(); // Stop mouse emulation
         keys[key] = true;
-        handleGlobalInput();
+        
+        // Handle Start/Restart Logic on Mobile via Jump Button
+        if (key === 'up') {
+            if (currentState === STATE.START) currentState = STATE.PLAYING;
+            if (currentState === STATE.GAMEOVER || currentState === STATE.WIN) resetGame();
+        }
     }, { passive: false });
 
+    // Touch End -> Key Up
     el.addEventListener('touchend', (e) => {
         e.preventDefault();
         keys[key] = false;
@@ -216,48 +196,56 @@ attachTouch('btn-left', 'left');
 attachTouch('btn-right', 'right');
 attachTouch('btn-jump', 'up');
 
-// Unified State Transition Logic
-function handleGlobalInput() {
-    if (keys.up) {
-        if (currentState === STATE.START) currentState = STATE.PLAYING;
-        else if (currentState === STATE.GAMEOVER || currentState === STATE.WIN) resetGame();
-    }
-}
 
 // ===========================
-// ASSETS
+// LOAD IMAGES
 // ===========================
-// Note: Ensure these images exist in your folder!
-const playerLeftImg = new Image(); playerLeftImg.src = "left.png"; 
-const playerRightImg = new Image(); playerRightImg.src = "right.png";
-const goalImage = new Image(); goalImage.src = "Shri-Ajab-3D-Jaipuri-Mixture.png";
-const winnerImage = new Image(); winnerImage.src = "1.png";
+const playerLeftImg = new Image();
+playerLeftImg.src = "left.png"; 
 
-const enemyImages = ["2.png", "3.png", "4.png", "5.png"].map(url => {
-    const img = new Image(); img.src = url; return img;
+const playerRightImg = new Image();
+playerRightImg.src = "right.png";
+
+const goalImage = new Image();
+goalImage.src = "Shri-Ajab-3D-Jaipuri-Mixture.png";
+
+const enemyImageUrls = ["2.png", "3.png", "4.png", "5.png"];
+const enemyImages = enemyImageUrls.map(url => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = url;
+    return img;
 });
 
 // ===========================
-// GAME CLASSES
+// Game Classes
 // ===========================
 
 class Player {
     constructor(x, y) {
-        this.x = x; this.y = y;
-        this.width = 63; this.height = 112;
-        this.velX = 0; this.velY = 0;
-        this.maxSpeed = 8; this.acceleration = 1.0; 
+        this.x = x;
+        this.y = y;
+        this.width = 63;
+        this.height = 112;
+        this.velX = 0;
+        this.velY = 0;
+        this.maxSpeed = 8;       
+        this.acceleration = 1.0; 
         this.jumpStrength = -13;
-        this.grounded = false; this.facingRight = true;
+        this.grounded = false;
+        this.facingRight = true;
     }
+
     update() {
         if (keys.right) {
             if (this.velX < this.maxSpeed) this.velX += this.acceleration;
             this.facingRight = true;
-        } else if (keys.left) {
+        } 
+        else if (keys.left) {
             if (this.velX > -this.maxSpeed) this.velX -= this.acceleration;
             this.facingRight = false;
         }
+
         this.velX *= FRICTION;
         if (Math.abs(this.velX) < 0.1) this.velX = 0;
 
@@ -270,93 +258,159 @@ class Player {
         this.x += this.velX;
         this.y += this.velY;
 
-        // Death Floor
-        if (this.y > GAME_HEIGHT + 100) currentState = STATE.GAMEOVER;
+        if (this.y > GAME_HEIGHT + 100) {
+            currentState = STATE.GAMEOVER;
+        }
     }
-    draw(camX) {
-        const drawX = this.x - camX;
-        let img = this.facingRight ? playerRightImg : playerLeftImg;
-        let bob = (Math.abs(this.velX) > 0.5 && this.grounded) ? Math.sin(Date.now()/100)*3 : 0;
+
+    draw(cameraOffset) {
+        const drawX = this.x - cameraOffset;
+        let imgToDraw = this.facingRight ? playerRightImg : playerLeftImg;
         
-        // Shadow
+        let bob = 0;
+        if (Math.abs(this.velX) > 0.5 && this.grounded) {
+             bob = Math.sin(Date.now() / 100) * 3;
+        }
+
         ctx.fillStyle = "rgba(0,0,0,0.2)";
         ctx.beginPath();
         ctx.ellipse(drawX + this.width/2, this.y + this.height - 2, 15, 5, 0, 0, Math.PI*2);
         ctx.fill();
 
-        if (img.complete && img.naturalHeight !== 0) {
-            ctx.drawImage(img, drawX, this.y + bob, this.width, this.height);
+        if (imgToDraw.complete && imgToDraw.naturalHeight !== 0) {
+            ctx.drawImage(imgToDraw, drawX, this.y + bob, this.width, this.height);
         } else {
-            ctx.fillStyle = "red"; ctx.fillRect(drawX, this.y, this.width, this.height);
+            ctx.fillStyle = "red";
+            ctx.fillRect(drawX, this.y, this.width, this.height);
         }
     }
 }
 
 class Platform {
-    constructor(x, y, w, h) {
-        this.x = x; this.y = y; this.width = w; this.height = h;
+    constructor(x, y, width, height) {
+        this.x = x; this.y = y; this.width = width; this.height = height;
     }
-    draw(camX) {
+
+    draw(cameraOffset) {
+        ctx.save(); 
+        ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetX = 6;
+        ctx.shadowOffsetY = 6;
         ctx.fillStyle = "#5086b4";
-        ctx.fillRect(this.x - camX, this.y, this.width, this.height);
-        ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
-        ctx.strokeRect(this.x - camX, this.y, this.width, this.height);
+        ctx.fillRect(this.x - cameraOffset, this.y, this.width, this.height);
+        ctx.restore(); 
+
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(this.x - cameraOffset, this.y);
+        ctx.lineTo(this.x - cameraOffset + this.width, this.y);
+        ctx.stroke();
+        
+        for(let i = this.x; i < this.x + this.width; i+=40) {
+             ctx.beginPath();
+             ctx.moveTo(i - cameraOffset, this.y);
+             ctx.lineTo(i - cameraOffset, this.y + this.height);
+             ctx.stroke();
+        }
     }
 }
 
 class Enemy {
     constructor(x, y, range) {
-        this.x = x; this.y = y; this.width = 70; this.height = 70;
-        this.startX = x; this.range = range; this.speed = 2; this.dir = 1;
-        this.del = false;
-        this.img = enemyImages[Math.floor(Math.random() * enemyImages.length)];
+        this.x = x; this.y = y;
+        this.width = 70; this.height = 70;
+        this.startX = x; this.range = range;
+        this.speed = 2; this.direction = 1;
+        this.markedForDeletion = false;
+        this.image = enemyImages[Math.floor(Math.random() * enemyImages.length)];
     }
+
     update() {
-        this.x += this.speed * this.dir;
-        if (this.x > this.startX + this.range || this.x < this.startX) this.dir *= -1;
+        this.x += this.speed * this.direction;
+        if (this.x > this.startX + this.range || this.x < this.startX) {
+            this.direction *= -1;
+        }
     }
-    draw(camX) {
-        let drawX = this.x - camX;
-        if (this.img.complete && this.img.naturalHeight !== 0) {
-            ctx.drawImage(this.img, drawX, this.y, this.width, this.height);
+
+    draw(cameraOffset) {
+        let drawX = this.x - cameraOffset;
+        if (this.image.complete && this.image.naturalHeight !== 0) {
+            ctx.drawImage(this.image, drawX, this.y, this.width, this.height);
         } else {
-            ctx.fillStyle = "orange"; ctx.fillRect(drawX, this.y, this.width, this.height);
+            ctx.fillStyle = Math.random() > 0.5 ? "#E91E63" : "#FF5722";
+            ctx.fillRect(drawX, this.y, this.width, this.height);
+            ctx.fillStyle = "#FFF";
+            ctx.font = "bold 10px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("BRAND", drawX + this.width/2, this.y + this.height/2);
+            ctx.textAlign = "left";
         }
     }
 }
 
-class Goal {
-    constructor(x, y) { this.x = x; this.y = y; this.w = 60; this.h = 40; }
-    draw(camX) {
-        let drawX = this.x - camX;
+class ShriAjabGoal {
+    constructor(x, y) {
+        this.x = x; this.y = y;
+        this.width = 60; this.height = 40;
+    }
+    
+    draw(cameraOffset) {
+        let drawX = this.x - cameraOffset;
         if (goalImage.complete && goalImage.naturalHeight !== 0) {
-            ctx.drawImage(goalImage, drawX, this.y, this.w, this.h);
+            ctx.drawImage(goalImage, drawX, this.y, this.width, this.height);
         } else {
-            ctx.fillStyle = "gold"; ctx.fillRect(drawX, this.y, this.w, this.h);
+            ctx.fillStyle = "transparent";
+            ctx.fillRect(drawX, this.y, this.width, this.height);
         }
         
-        // Winner Badge above goal
+        let logoTopY = this.y - 40;
         if (winnerImage.complete && winnerImage.naturalHeight !== 0) {
-            ctx.drawImage(winnerImage, drawX - 10, this.y - 40, 80, 80);
+            ctx.drawImage(winnerImage, drawX - 10, logoTopY, 80, 80);
+        }
+
+        ctx.save(); 
+        ctx.fillStyle = "#FFD700";
+        ctx.font = "bold 16px 'Press Start 2P'";
+        ctx.textAlign = "center";
+        ctx.shadowColor = "rgba(0,0,0,0.8)";
+        ctx.shadowBlur = 4;
+        ctx.fillText("WINNER", drawX + this.width / 2, logoTopY - 15);
+        ctx.restore();
+    }
+}
+
+class Decoration {
+    constructor(x, y, type) {
+        this.x = x; this.y = y; this.type = type;
+    }
+    draw(cameraOffset) {
+        ctx.fillStyle = "#A1887F";
+        if(this.type === 'arch') {
+             ctx.beginPath();
+             ctx.arc(this.x - cameraOffset, this.y, 40, Math.PI, 0);
+             ctx.fill();
+             ctx.fillRect(this.x - 40 - cameraOffset, this.y, 10, 60);
+             ctx.fillRect(this.x + 30 - cameraOffset, this.y, 10, 60);
         }
     }
 }
 
 // ===========================
-// MAIN LOGIC
+// Game Logic
 // ===========================
 
 let player;
 let platforms = [];
 let enemies = [];
+let decorations = [];
 let goal;
 
 function initGame() {
     score = 0;
     cameraX = 0;
-    
-    // Position floor relative to bottom of screen
-    let groundY = GAME_HEIGHT - 60;
+    let groundY = GAME_HEIGHT - 40;
     
     player = new Player(100, groundY - 150);
     
@@ -364,23 +418,28 @@ function initGame() {
         new Platform(0, groundY, 1000, 40),
         new Platform(1100, groundY, 800, 40),
         new Platform(2000, groundY, 1000, 40),
-        // Steps
+        
         new Platform(300, groundY - 150, 150, 30),
         new Platform(700, groundY - 80, 150, 30),
+        
         new Platform(500, groundY - 160, 150, 30),
         new Platform(1200, groundY - 110, 200, 30),
         new Platform(1800, groundY - 110, 150, 30),
+        
         new Platform(1500, groundY - 210, 200, 30),
+        new Platform(2200, groundY - 110, 100, 30),
+        new Platform(2400, groundY - 210, 100, 30),
         new Platform(2600, groundY - 310, 300, 40)
     ];
 
     enemies = [
         new Enemy(400, groundY - 70, 200),
         new Enemy(1200, groundY - 180, 150),
+        new Enemy(1600, groundY - 280, 100),
         new Enemy(2100, groundY - 70, 300)
     ];
     
-    goal = new Goal(2750, groundY - 350);
+    goal = new ShriAjabGoal(2750, groundY - 350);
 }
 
 function resetGame() {
@@ -388,11 +447,13 @@ function resetGame() {
     initGame();
 }
 
-function checkRectCollide(r1, r2) {
-    return (r1.x < r2.x + (r2.width || r2.w) &&
-            r1.x + r1.width > r2.x &&
-            r1.y < r2.y + (r2.height || r2.h) &&
-            r1.y + r1.height > r2.y);
+function checkCollision(rect1, rect2) {
+    return (
+        rect1.x < rect2.x + rect2.width &&
+        rect1.x + rect1.width > rect2.x &&
+        rect1.y < rect2.y + rect2.height &&
+        rect1.y + rect1.height > rect2.y
+    );
 }
 
 function update() {
@@ -400,58 +461,74 @@ function update() {
 
     player.update();
     
-    // Platform Collisions
     player.grounded = false;
-    for (const p of platforms) {
-        if (checkRectCollide(player, p)) {
-            // Landing on top
-            if (player.velY > 0 && player.y + player.height - player.velY <= p.y + 10) {
-                player.grounded = true; player.velY = 0; player.y = p.y - player.height;
+    for (const plat of platforms) {
+        if (checkCollision(player, plat)) {
+            if (player.velY > 0 && player.y + player.height - player.velY <= plat.y) {
+                player.grounded = true;
+                player.velY = 0;
+                player.y = plat.y - player.height;
             }
-            // Hitting bottom
-            else if (player.velY < 0 && player.y - player.velY >= p.y + p.height - 10) {
-                 player.velY = 0; player.y = p.y + p.height;
-            }
-            // Side collisions
-            else if(player.velX > 0 && player.x + player.width - player.velX <= p.x) {
-                 player.x = p.x - player.width; player.velX = 0;
-            }
-            else if(player.velX < 0 && player.x - player.velX >= p.x + p.width) {
-                 player.x = p.x + p.width; player.velX = 0;
+            else if (player.velY < 0 && player.y - player.velY >= plat.y + plat.height) {
+                 player.velY = 0;
+                 player.y = plat.y + plat.height;
             }
         }
     }
+    
+    for (const plat of platforms) {
+        if (checkCollision(player, plat)) {
+            if(player.velX > 0 && player.x + player.width - player.velX <= plat.x) {
+                 player.x = plat.x - player.width;
+                 player.velX = 0;
+            }
+            else if(player.velX < 0 && player.x - player.velX >= plat.x + plat.width) {
+                 player.x = plat.x + plat.width;
+                 player.velX = 0;
+            }
+        }
+     }
 
-    // Enemies
-    enemies.forEach(e => {
-        e.update();
-        if (!e.del && checkRectCollide(player, e)) {
-            e.del = true; score += 100;
+    enemies.forEach(e => e.update());
+
+    enemies.forEach(enemy => {
+        if (!enemy.markedForDeletion && checkCollision(player, enemy)) {
+            enemy.markedForDeletion = true;
+            score += 100;
         }
     });
-    enemies = enemies.filter(e => !e.del);
     
-    // Goal
-    if(checkRectCollide(player, goal)) {
-        currentState = STATE.WIN; score += 1000;
+    if(checkCollision(player, goal)) {
+        currentState = STATE.WIN;
+        score += 1000;
     }
 
-    // Camera
-    let targetCam = player.x - GAME_WIDTH * 0.3;
-    if(targetCam < 0) targetCam = 0;
-    cameraX += (targetCam - cameraX) * 0.1;
+    enemies = enemies.filter(e => !e.markedForDeletion);
+
+    let targetCameraX = player.x - GAME_WIDTH * 0.3; 
+    if(targetCameraX < 0) targetCameraX = 0;
+    cameraX += (targetCameraX - cameraX) * 0.1;
+}
+
+function drawUI() {
+    ctx.fillStyle = "#000";
+    ctx.font = "20px Arial";
+    ctx.fillText("Score: " + score, 20, 30);
 }
 
 function drawOverlay(title, subtitle) {
     ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
     
-    ctx.fillStyle = "#FFC107"; ctx.textAlign = "center";
+    ctx.fillStyle = "#FFC107";
+    ctx.textAlign = "center";
     ctx.font = "bold 40px Arial";
-    ctx.fillText(title, GAME_WIDTH/2, GAME_HEIGHT/2 - 20);
+    ctx.fillText(title, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 20);
     
-    ctx.fillStyle = "#FFF"; ctx.font = "20px Arial";
-    ctx.fillText(subtitle, GAME_WIDTH/2, GAME_HEIGHT/2 + 30);
+    ctx.fillStyle = "#FFF";
+    ctx.font = "20px Arial";
+    // Modified subtitle to include mobile instruction
+    ctx.fillText(subtitle, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30);
     ctx.textAlign = "left";
 }
 
@@ -459,32 +536,34 @@ function draw() {
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
     if (currentState === STATE.START) {
-        drawOverlay("ADVENTURE WITH KOKO", "Press Jump/Enter to Start");
+        drawOverlay("ADVENTURE WITH KOKO", "Press Enter or Tap Jump to Start");
         return;
     }
 
-    // Draw World
+    decorations.forEach(d => d.draw(cameraX));
     platforms.forEach(p => p.draw(cameraX));
     goal.draw(cameraX);
     enemies.forEach(e => e.draw(cameraX));
     player.draw(cameraX);
-    
-    // UI
-    ctx.fillStyle = "#000"; ctx.font = "20px Arial";
-    ctx.fillText("Score: " + score, 20, 30);
 
-    if (currentState === STATE.GAMEOVER) drawOverlay("GAME OVER", "Press Jump/Enter to Restart");
-    if (currentState === STATE.WIN) drawOverlay("YOU WIN!", "Final Score: " + score);
+    drawUI();
+
+    if (currentState === STATE.GAMEOVER) {
+        drawOverlay("GAME OVER", "Tap Jump to Restart");
+    } else if (currentState === STATE.WIN) {
+        drawOverlay("YOU WIN", "Final Score: " + score + " - Tap Jump to Restart");
+    }
 }
 
-// Game Loop
 initGame();
-function loop() {
+
+function gameLoop(timestamp) {
     update();
     draw();
-    requestAnimationFrame(loop);
+    requestAnimationFrame(gameLoop);
 }
-requestAnimationFrame(loop);
+
+requestAnimationFrame(gameLoop);
 
 </script>
 </body>
