@@ -2,258 +2,227 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-    <title>Adventure with Koko - Mobile Optimized</title>
+    <title>Adventure with Koko</title>
     <style>
-        :root {
-            --control-size: 80px;
-            --control-margin: 20px;
-        }
-
         body {
             margin: 0;
             padding: 0;
-            background-color: #202020;
+            background-color: #333;
             overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            touch-action: none; 
+            /* CRITICAL FIX: Disables default touch actions (scrolling/panning) on the whole body */
+            touch-action: none;
             user-select: none;
             -webkit-user-select: none;
-            -webkit-touch-callout: none;
         }
-
         #gameCanvas {
             display: block;
             width: 100vw;
             height: 100vh;
-            image-rendering: pixelated; /* Sharpens sprites */
-            background-image: url('back.png'); 
+            background-image: url('back.png');
             background-size: cover;
             background-position: center;
         }
-
-        /* --- ORIENTATION LOCK OVERLAY --- */
-        #orientation-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: #1a1a1a;
-            color: white;
-            z-index: 9999;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-        }
-
-        #orientation-overlay h1 { font-size: 2rem; margin-bottom: 20px; }
-        #orientation-overlay p { font-size: 1.2rem; color: #ccc; }
-        #rotate-icon { font-size: 4rem; margin-bottom: 20px; animation: rotate 2s infinite; }
-
-        @keyframes rotate {
-            0% { transform: rotate(0deg); }
-            25% { transform: rotate(-90deg); }
-            100% { transform: rotate(-90deg); }
-        }
-
-        /* Logic: Show overlay in Portrait */
-        @media screen and (orientation: portrait) {
-            #orientation-overlay { display: flex; }
-            #gameCanvas, .controls-overlay { display: none !important; }
-        }
-
-        /* --- MOBILE CONTROLS --- */
+        /* --- MOBILE CONTROLS STYLING --- */
         .controls-overlay {
-            position: fixed;
-            bottom: 0;
-            left: 0;
+            position: absolute;
+            bottom: 20px;
             width: 100%;
-            height: 100%;
-            pointer-events: none;
+            height: 120px;
+            pointer-events: none; /* Let touches pass through empty spaces */
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-sizing: border-box;
             z-index: 100;
-            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
         }
-
-        /* Hide controls on desktop */
+        /* Only show controls on touch devices or small screens */
         @media (min-width: 1024px) {
             .controls-overlay { display: none; }
         }
-
-        .control-group {
-            position: absolute;
-            bottom: var(--control-margin);
-            pointer-events: auto;
+        .d-pad, .action-btn {
+            pointer-events: auto; /* Re-enable pointer events for buttons */
             display: flex;
-            gap: 15px;
+            gap: 20px;
         }
-
-        .left-controls { left: var(--control-margin); }
-        .right-controls { right: var(--control-margin); }
-
         .control-btn {
-            width: var(--control-size);
-            height: var(--control-size);
-            background: rgba(255, 255, 255, 0.15);
-            border: 2px solid rgba(255, 255, 255, 0.3);
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
             border-radius: 50%;
             color: white;
-            font-size: 32px;
+            font-size: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
+            user-select: none;
+            touch-action: none;
             backdrop-filter: blur(4px);
-            transition: transform 0.1s, background 0.1s;
         }
-
-        .control-btn:active, .control-btn.active {
-            background: rgba(255, 255, 255, 0.4);
+        .control-btn:active {
+            background: rgba(255, 255, 255, 0.5);
             transform: scale(0.95);
         }
-
-        #btn-jump { background: rgba(255, 200, 0, 0.25); border-color: rgba(255, 200, 0, 0.5); }
-        #btn-jump:active, #btn-jump.active { background: rgba(255, 200, 0, 0.5); }
-
+        #rotateOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: black;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            text-align: center;
+            z-index: 200;
+            display: none;
+        }
     </style>
 </head>
 <body>
-
-<div id="orientation-overlay">
-    <div id="rotate-icon">📱</div>
-    <h1>Rotate Device</h1>
-    <p>This game requires Landscape mode.</p>
-</div>
-
 <canvas id="gameCanvas"></canvas>
-
 <div class="controls-overlay">
-    <div class="control-group left-controls">
+    <div class="d-pad">
         <div class="control-btn" id="btn-left">◀</div>
         <div class="control-btn" id="btn-right">▶</div>
     </div>
-    <div class="control-group right-controls">
-        <div class="control-btn" id="btn-jump">▲</div>
+    <div class="action-btn">
+        <div class="control-btn" id="btn-jump" style="background: rgba(255, 200, 0, 0.3);">▲</div>
     </div>
 </div>
-
+<div id="rotateOverlay">
+    <div>Please rotate your device to landscape mode to play.</div>
+</div>
 <script>
 // ===========================
-// CORE ARCHITECTURE
+// Game Setup & Globals
 // ===========================
 const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d', { alpha: false }); // Optimization: Disable alpha channel if not needed for canvas background
-
-const assets = {
-    winner: new Image(),
-    playerLeft: new Image(),
-    playerRight: new Image(),
-    goal: new Image(),
-    enemies: []
-};
-
-// PRESERVED ASSET PATHS
-assets.winner.src = "1.png";
-assets.playerLeft.src = "left.png";
-assets.playerRight.src = "right.png";
-assets.goal.src = "Shri-Ajab-3D-Jaipuri-Mixture.png";
-
-["2.png", "3.png", "4.png", "5.png"].forEach(url => {
-    const img = new Image();
-    img.src = url;
-    assets.enemies.push(img);
-});
-
-// Dynamic Resolution
+const ctx = canvas.getContext('2d');
+const winnerImage = new Image();
+winnerImage.src = "1.png";
+// --- DYNAMIC RESOLUTION SETUP ---
 let GAME_WIDTH = window.innerWidth;
 let GAME_HEIGHT = window.innerHeight;
-
+let isLandscape = false;
 function resizeCanvas() {
     GAME_WIDTH = window.innerWidth;
     GAME_HEIGHT = window.innerHeight;
     canvas.width = GAME_WIDTH;
     canvas.height = GAME_HEIGHT;
-    // Note: If resize happens during gameplay, this might shift platforms relative to player.
-    // In a real engine, we would scale the world, not just the canvas.
 }
-window.addEventListener('resize', resizeCanvas);
+function checkOrientation() {
+    isLandscape = window.innerWidth > window.innerHeight;
+    if (isLandscape) {
+        document.getElementById('rotateOverlay').style.display = 'none';
+        canvas.style.display = 'block';
+    } else {
+        document.getElementById('rotateOverlay').style.display = 'flex';
+        canvas.style.display = 'none';
+    }
+}
+// Initial setup
 resizeCanvas();
-
+checkOrientation();
+window.addEventListener('resize', () => {
+    resizeCanvas();
+    checkOrientation();
+});
+const STATE = {
+    START: 0,
+    PLAYING: 1,
+    GAMEOVER: 2,
+    WIN: 3
+};
+let currentState = STATE.START;
+const GRAVITY = 0.5;
+const FRICTION = 0.8;
+let score = 0;
+let cameraX = 0;
+// Centralized Input State
+const keys = {
+    right: false,
+    left: false,
+    up: false,
+    space: false
+};
 // ===========================
-// INPUT SYSTEM
+// INPUT HANDLING (DESKTOP + MOBILE)
 // ===========================
-const keys = { right: false, left: false, up: false };
-
-// Desktop
+// 1. Desktop Keyboard Support
 document.addEventListener('keydown', (e) => {
-    // Prevent default scrolling for game keys
-    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault();
-    
+    // Prevent scrolling with arrow keys
+    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.code) > -1) {
+        e.preventDefault();
+    }
     if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
-    if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space') keys.up = true;
-    
-    handleStateInput(e.code);
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') keys.up = true;
+    // Handle Game State Transitions via Enter
+    if ((currentState === STATE.GAMEOVER || currentState === STATE.WIN) && e.code === 'Enter') {
+        resetGame();
+    }
+    if (currentState === STATE.START && e.code === 'Enter') {
+        currentState = STATE.PLAYING;
+    }
 });
-
 document.addEventListener('keyup', (e) => {
     if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
-    if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space') keys.up = false;
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') keys.up = false;
+    if (e.code === 'Space') keys.space = false;
 });
-
-// Mobile Touch (Multi-touch support)
-function setupTouch(id, key) {
-    const el = document.getElementById(id);
+// 2. Mobile Touch Support
+// We attach listeners to the HTML elements we created in the body
+function attachTouch(elementId, key) {
+    const el = document.getElementById(elementId);
     if (!el) return;
-
-    const handleStart = (e) => {
-        e.preventDefault(); 
+    // Touch Start -> Key Down
+    el.addEventListener('touchstart', (e) => {
+        e.preventDefault(); // Stop mouse emulation
         keys[key] = true;
-        el.classList.add('active'); // Visual feedback
-        if (key === 'up') handleStateInput('Space');
-    };
-
-    const handleEnd = (e) => {
+       
+        // Handle Start/Restart Logic on Mobile via Jump Button
+        if (key === 'up') {
+            if (currentState === STATE.START) currentState = STATE.PLAYING;
+            if (currentState === STATE.GAMEOVER || currentState === STATE.WIN) resetGame();
+        }
+    }, { passive: false });
+    // Touch End -> Key Up
+    el.addEventListener('touchend', (e) => {
         e.preventDefault();
         keys[key] = false;
-        el.classList.remove('active');
-    };
-
-    el.addEventListener('touchstart', handleStart, { passive: false });
-    el.addEventListener('touchend', handleEnd, { passive: false });
-    // Handle finger sliding off button
-    el.addEventListener('touchcancel', handleEnd, { passive: false });
+    }, { passive: false });
 }
-
-setupTouch('btn-left', 'left');
-setupTouch('btn-right', 'right');
-setupTouch('btn-jump', 'up');
-
-function handleStateInput(code) {
-    if (currentState === STATE.START && (code === 'Enter' || code === 'Space')) {
-        currentState = STATE.PLAYING;
-    }
-    else if ((currentState === STATE.GAMEOVER || currentState === STATE.WIN) && (code === 'Enter' || code === 'Space')) {
-        resetGame();
-    }
-}
-
+attachTouch('btn-left', 'left');
+attachTouch('btn-right', 'right');
+attachTouch('btn-jump', 'up');
 // ===========================
-// GAME LOGIC
+// LOAD IMAGES
 // ===========================
-const STATE = { START: 0, PLAYING: 1, GAMEOVER: 2, WIN: 3 };
-let currentState = STATE.START;
-
-// Physics Constants
-const GRAVITY = 0.5;
-const FRICTION = 0.8; 
-
-// Camera State
-let camera = { x: 0, y: 0 };
-let score = 0;
-
+const playerLeftImg = new Image();
+playerLeftImg.src = "left.png";
+const playerRightImg = new Image();
+playerRightImg.src = "right.png";
+const goalImage = new Image();
+goalImage.src = "Shri-Ajab-3D-Jaipuri-Mixture.png";
+const enemyImageUrls = ["2.png", "3.png", "4.png", "5.png"];
+const enemyImages = enemyImageUrls.map(url => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = url;
+    return img;
+});
+// ===========================
+// Game Classes
+// ===========================
 class Player {
     constructor(x, y) {
         this.x = x;
@@ -262,110 +231,82 @@ class Player {
         this.height = 112;
         this.velX = 0;
         this.velY = 0;
-        this.maxSpeed = 8;        
-        this.acceleration = 1.0; 
+        this.maxSpeed = 8;      
+        this.acceleration = 1.0;
         this.jumpStrength = -13;
         this.grounded = false;
         this.facingRight = true;
     }
-
     update() {
-        // Horizontal Movement
         if (keys.right) {
             if (this.velX < this.maxSpeed) this.velX += this.acceleration;
             this.facingRight = true;
-        } else if (keys.left) {
+        }
+        else if (keys.left) {
             if (this.velX > -this.maxSpeed) this.velX -= this.acceleration;
             this.facingRight = false;
         }
-
         this.velX *= FRICTION;
         if (Math.abs(this.velX) < 0.1) this.velX = 0;
-
-        // Jumping
         if (keys.up && this.grounded) {
             this.velY = this.jumpStrength;
             this.grounded = false;
         }
-
-        // Apply Physics
         this.velY += GRAVITY;
         this.x += this.velX;
         this.y += this.velY;
-
-        // Death Floor
-        if (this.y > GAME_HEIGHT + 300) { // Increased buffer for vertical scrolling
+        if (this.y > GAME_HEIGHT + 100) {
             currentState = STATE.GAMEOVER;
         }
     }
-
-    draw(camX, camY) {
-        const drawX = this.x - camX;
-        const drawY = this.y - camY;
-        
-        let imgToDraw = this.facingRight ? assets.playerRight : assets.playerLeft;
-        
-        // Idle Bobbing Animation
+    draw(cameraOffset) {
+        const drawX = this.x - cameraOffset;
+        let imgToDraw = this.facingRight ? playerRightImg : playerLeftImg;
+       
         let bob = 0;
         if (Math.abs(this.velX) > 0.5 && this.grounded) {
              bob = Math.sin(Date.now() / 100) * 3;
         }
-
-        // Shadow
         ctx.fillStyle = "rgba(0,0,0,0.2)";
         ctx.beginPath();
-        ctx.ellipse(drawX + this.width/2, drawY + this.height - 2, 15, 5, 0, 0, Math.PI*2);
+        ctx.ellipse(drawX + this.width/2, this.y + this.height - 2, 15, 5, 0, 0, Math.PI*2);
         ctx.fill();
-
         if (imgToDraw.complete && imgToDraw.naturalHeight !== 0) {
-            ctx.drawImage(imgToDraw, drawX, drawY + bob, this.width, this.height);
+            ctx.drawImage(imgToDraw, drawX, this.y + bob, this.width, this.height);
         } else {
-            // Fallback
             ctx.fillStyle = "red";
-            ctx.fillRect(drawX, drawY, this.width, this.height);
+            ctx.fillRect(drawX, this.y, this.width, this.height);
         }
     }
 }
-
 class Platform {
     constructor(x, y, width, height) {
         this.x = x; this.y = y; this.width = width; this.height = height;
     }
-
-    draw(camX, camY) {
-        const drawX = this.x - camX;
-        const drawY = this.y - camY;
-
-        // Optimization: Don't draw off-screen platforms
-        if (drawX + this.width < 0 || drawX > GAME_WIDTH || drawY + this.height < 0 || drawY > GAME_HEIGHT) return;
-
-        ctx.save(); 
+    draw(cameraOffset) {
+        ctx.save();
         ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
         ctx.shadowBlur = 10;
         ctx.shadowOffsetX = 6;
         ctx.shadowOffsetY = 6;
         ctx.fillStyle = "#5086b4";
-        ctx.fillRect(drawX, drawY, this.width, this.height);
-        ctx.restore(); 
-
+        ctx.fillRect(this.x - cameraOffset, this.y, this.width, this.height);
+        ctx.restore();
         ctx.strokeStyle = "white";
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(drawX, drawY);
-        ctx.lineTo(drawX + this.width, drawY);
+        ctx.moveTo(this.x - cameraOffset, this.y);
+        ctx.lineTo(this.x - cameraOffset + this.width, this.y);
         ctx.stroke();
-        
-        // Texture detail
-        ctx.beginPath();
+       
         for(let i = this.x; i < this.x + this.width; i+=40) {
-             let lineX = i - camX;
-             ctx.moveTo(lineX, drawY);
-             ctx.lineTo(lineX, drawY + this.height);
+             ctx.beginPath();
+             ctx.moveTo(i - cameraOffset, this.y);
+             ctx.lineTo(i - cameraOffset, this.y + this.height);
+             ctx.stroke();
         }
-        ctx.stroke();
     }
 }
-
 class Enemy {
     constructor(x, y, range) {
         this.x = x; this.y = y;
@@ -373,54 +314,51 @@ class Enemy {
         this.startX = x; this.range = range;
         this.speed = 2; this.direction = 1;
         this.markedForDeletion = false;
-        this.image = assets.enemies[Math.floor(Math.random() * assets.enemies.length)];
+        this.image = enemyImages[Math.floor(Math.random() * enemyImages.length)];
     }
-
     update() {
         this.x += this.speed * this.direction;
         if (this.x > this.startX + this.range || this.x < this.startX) {
             this.direction *= -1;
         }
     }
-
-    draw(camX, camY) {
-        let drawX = this.x - camX;
-        let drawY = this.y - camY;
-
+    draw(cameraOffset) {
+        let drawX = this.x - cameraOffset;
         if (this.image.complete && this.image.naturalHeight !== 0) {
-            ctx.drawImage(this.image, drawX, drawY, this.width, this.height);
+            ctx.drawImage(this.image, drawX, this.y, this.width, this.height);
         } else {
-            ctx.fillStyle = "#E91E63";
-            ctx.fillRect(drawX, drawY, this.width, this.height);
+            ctx.fillStyle = Math.random() > 0.5 ? "#E91E63" : "#FF5722";
+            ctx.fillRect(drawX, this.y, this.width, this.height);
+            ctx.fillStyle = "#FFF";
+            ctx.font = "bold 10px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("BRAND", drawX + this.width/2, this.y + this.height/2);
+            ctx.textAlign = "left";
         }
     }
 }
-
-class Goal {
+class ShriAjabGoal {
     constructor(x, y) {
         this.x = x; this.y = y;
         this.width = 60; this.height = 40;
     }
-    
-    draw(camX, camY) {
-        let drawX = this.x - camX;
-        let drawY = this.y - camY;
-
-        if (assets.goal.complete && assets.goal.naturalHeight !== 0) {
-            ctx.drawImage(assets.goal, drawX, drawY, this.width, this.height);
+   
+    draw(cameraOffset) {
+        let drawX = this.x - cameraOffset;
+        if (goalImage.complete && goalImage.naturalHeight !== 0) {
+            ctx.drawImage(goalImage, drawX, this.y, this.width, this.height);
         } else {
-            ctx.fillStyle = "gold";
-            ctx.fillRect(drawX, drawY, this.width, this.height);
+            ctx.fillStyle = "transparent";
+            ctx.fillRect(drawX, this.y, this.width, this.height);
         }
-        
-        let logoTopY = drawY - 40;
-        if (assets.winner.complete && assets.winner.naturalHeight !== 0) {
-            ctx.drawImage(assets.winner, drawX - 10, logoTopY, 80, 80);
+       
+        let logoTopY = this.y - 40;
+        if (winnerImage.complete && winnerImage.naturalHeight !== 0) {
+            ctx.drawImage(winnerImage, drawX - 10, logoTopY, 80, 80);
         }
-
-        ctx.save(); 
+        ctx.save();
         ctx.fillStyle = "#FFD700";
-        ctx.font = "bold 16px 'Press Start 2P', cursive";
+        ctx.font = "bold 16px 'Press Start 2P'";
         ctx.textAlign = "center";
         ctx.shadowColor = "rgba(0,0,0,0.8)";
         ctx.shadowBlur = 4;
@@ -428,53 +366,66 @@ class Goal {
         ctx.restore();
     }
 }
-
+class Decoration {
+    constructor(x, y, type) {
+        this.x = x; this.y = y; this.type = type;
+    }
+    draw(cameraOffset) {
+        ctx.fillStyle = "#A1887F";
+        if(this.type === 'arch') {
+             ctx.beginPath();
+             ctx.arc(this.x - cameraOffset, this.y, 40, Math.PI, 0);
+             ctx.fill();
+             ctx.fillRect(this.x - 40 - cameraOffset, this.y, 10, 60);
+             ctx.fillRect(this.x + 30 - cameraOffset, this.y, 10, 60);
+        }
+    }
+}
 // ===========================
-// MAIN LOOP & ENTITIES
+// Game Logic
 // ===========================
 let player;
 let platforms = [];
 let enemies = [];
+let decorations = [];
 let goal;
-
 function initGame() {
     score = 0;
-    camera = { x: 0, y: 0 };
-    
-    // Level generation baseline
-    // We use a fixed reference so rotation doesn't break the level relative positions
-    let groundY = GAME_HEIGHT - 40; 
-    
+    cameraX = 0;
+    let groundY = GAME_HEIGHT - 160;
+   
     player = new Player(100, groundY - 150);
-    
+   
     platforms = [
         new Platform(0, groundY, 1000, 40),
         new Platform(1100, groundY, 800, 40),
         new Platform(2000, groundY, 1000, 40),
-        
+       
         new Platform(300, groundY - 150, 150, 30),
         new Platform(700, groundY - 80, 150, 30),
-        
+       
         new Platform(500, groundY - 160, 150, 30),
         new Platform(1200, groundY - 110, 200, 30),
         new Platform(1800, groundY - 110, 150, 30),
-        
+       
         new Platform(1500, groundY - 210, 200, 30),
         new Platform(2200, groundY - 110, 100, 30),
         new Platform(2400, groundY - 210, 100, 30),
         new Platform(2600, groundY - 310, 300, 40)
     ];
-
     enemies = [
         new Enemy(400, groundY - 70, 200),
         new Enemy(1200, groundY - 180, 150),
         new Enemy(1600, groundY - 280, 100),
         new Enemy(2100, groundY - 70, 300)
     ];
-    
-    goal = new Goal(2750, groundY - 350);
+   
+    goal = new ShriAjabGoal(2750, groundY - 350);
 }
-
+function resetGame() {
+    currentState = STATE.START;
+    initGame();
+}
 function checkCollision(rect1, rect2) {
     return (
         rect1.x < rect2.x + rect2.width &&
@@ -483,126 +434,100 @@ function checkCollision(rect1, rect2) {
         rect1.y + rect1.height > rect2.y
     );
 }
-
 function update() {
+    if (!isLandscape) return;
     if (currentState !== STATE.PLAYING) return;
-
     player.update();
-    
-    // Platform Collisions
+   
     player.grounded = false;
     for (const plat of platforms) {
         if (checkCollision(player, plat)) {
-            // Landing on top
-            if (player.velY > 0 && player.y + player.height - player.velY <= plat.y + 10) {
+            if (player.velY > 0 && player.y + player.height - player.velY <= plat.y) {
                 player.grounded = true;
                 player.velY = 0;
                 player.y = plat.y - player.height;
             }
-            // Hitting head on bottom
             else if (player.velY < 0 && player.y - player.velY >= plat.y + plat.height) {
                  player.velY = 0;
                  player.y = plat.y + plat.height;
             }
-            // Side collisions
-            else if(player.velX > 0 && player.x + player.width - player.velX <= plat.x + 10) {
+        }
+    }
+   
+    for (const plat of platforms) {
+        if (checkCollision(player, plat)) {
+            if(player.velX > 0 && player.x + player.width - player.velX <= plat.x) {
                  player.x = plat.x - player.width;
                  player.velX = 0;
             }
-            else if(player.velX < 0 && player.x - player.velX >= plat.x + plat.width - 10) {
+            else if(player.velX < 0 && player.x - player.velX >= plat.x + plat.width) {
                  player.x = plat.x + plat.width;
                  player.velX = 0;
             }
         }
-    }
-
-    // Entity Updates
+     }
     enemies.forEach(e => e.update());
-
-    // Enemy Collision
     enemies.forEach(enemy => {
         if (!enemy.markedForDeletion && checkCollision(player, enemy)) {
             enemy.markedForDeletion = true;
             score += 100;
         }
     });
-    enemies = enemies.filter(e => !e.markedForDeletion);
-    
-    // Win Condition
+   
     if(checkCollision(player, goal)) {
         currentState = STATE.WIN;
         score += 1000;
     }
-
-    // --- SMOOTH CAMERA LOGIC ---
-    // 1. Target Center (X)
-    let targetX = player.x - (GAME_WIDTH / 2) + (player.width / 2);
-    if(targetX < 0) targetX = 0; // Clamp left boundary
-
-    // 2. Target Center (Y) - Lookahead vertical camera
-    // We offset by 20% height so player isn't dead center (better for platformers to see what's above/below)
-    // IMPORTANT: Clamping Y so we don't show too much black void below ground
-    let targetY = player.y - (GAME_HEIGHT * 0.6); 
-    let maxCameraY = (GAME_HEIGHT - 40) - (GAME_HEIGHT * 0.9); // Don't scroll past ground too much
-    
-    // Smooth Lerp (0.1 factor)
-    camera.x += (targetX - camera.x) * 0.1;
-    camera.y += (targetY - camera.y) * 0.1;
+    enemies = enemies.filter(e => !e.markedForDeletion);
+    let targetCameraX = player.x - GAME_WIDTH / 2 + player.width / 2;
+    if(targetCameraX < 0) targetCameraX = 0;
+    cameraX += (targetCameraX - cameraX) * 0.1;
 }
-
+function drawUI() {
+    ctx.fillStyle = "#000";
+    ctx.font = "20px Arial";
+    ctx.fillText("Score: " + score, 20, 30);
+}
 function drawOverlay(title, subtitle) {
-    ctx.fillStyle = "rgba(0,0,0,0.85)";
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-    
+   
     ctx.fillStyle = "#FFC107";
     ctx.textAlign = "center";
-    ctx.font = "bold 40px 'Segoe UI', Arial";
+    ctx.font = "bold 40px Arial";
     ctx.fillText(title, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 20);
-    
+   
     ctx.fillStyle = "#FFF";
-    ctx.font = "18px 'Segoe UI', Arial";
+    ctx.font = "20px Arial";
+    // Modified subtitle to include mobile instruction
     ctx.fillText(subtitle, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30);
     ctx.textAlign = "left";
 }
-
 function draw() {
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-
     if (currentState === STATE.START) {
-        drawOverlay("ADVENTURE WITH KOKO", "Tap Jump (▲) to Start");
+        drawOverlay("ADVENTURE WITH KOKO", "Press Enter or Tap Jump to Start");
         return;
     }
-
-    // Draw World
-    platforms.forEach(p => p.draw(camera.x, camera.y));
-    goal.draw(camera.x, camera.y);
-    enemies.forEach(e => e.draw(camera.x, camera.y));
-    player.draw(camera.x, camera.y);
-
-    // Draw HUD
-    ctx.fillStyle = "#FFF";
-    ctx.font = "bold 24px 'Press Start 2P', monospace";
-    ctx.shadowColor = "black";
-    ctx.shadowBlur = 4;
-    ctx.fillText("SCORE: " + score, 20, 50);
-    ctx.shadowBlur = 0; // Reset
-
+    decorations.forEach(d => d.draw(cameraX));
+    platforms.forEach(p => p.draw(cameraX));
+    goal.draw(cameraX);
+    enemies.forEach(e => e.draw(cameraX));
+    player.draw(cameraX);
+    drawUI();
     if (currentState === STATE.GAMEOVER) {
-        drawOverlay("GAME OVER", "Tap Jump (▲) to Restart");
+        drawOverlay("GAME OVER", "Tap Jump to Restart");
     } else if (currentState === STATE.WIN) {
-        drawOverlay("YOU WIN", `Final Score: ${score} - Tap Jump (▲) to Restart`);
+        drawOverlay("YOU WIN", "Final Score: " + score + " - Tap Jump to Restart");
     }
 }
-
 initGame();
-
-function gameLoop() {
+function gameLoop(timestamp) {
     update();
     draw();
     requestAnimationFrame(gameLoop);
 }
 requestAnimationFrame(gameLoop);
-
 </script>
 </body>
 </html>
