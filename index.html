@@ -135,6 +135,8 @@ window.addEventListener('resize', () => {
     resizeCanvas();
     checkOrientation();
 });
+let scaleFactor = (window.innerWidth < 1024) ? 0.75 : 1;
+let controlHeight = (window.innerWidth < 1024) ? 140 : 40;
 const STATE = {
     START: 0,
     PLAYING: 1,
@@ -142,7 +144,7 @@ const STATE = {
     WIN: 3
 };
 let currentState = STATE.START;
-const GRAVITY = 0.5;
+const GRAVITY = 0.5 * scaleFactor;
 const FRICTION = 0.8;
 let score = 0;
 let cameraX = 0;
@@ -227,13 +229,13 @@ class Player {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.width = 63;
-        this.height = 112;
+        this.width = 63 * scaleFactor;
+        this.height = 112 * scaleFactor;
         this.velX = 0;
         this.velY = 0;
-        this.maxSpeed = 8;      
-        this.acceleration = 1.0;
-        this.jumpStrength = -13;
+        this.maxSpeed = 8 * scaleFactor;      
+        this.acceleration = 1.0 * scaleFactor;
+        this.jumpStrength = -13 * scaleFactor;
         this.grounded = false;
         this.facingRight = true;
     }
@@ -255,7 +257,7 @@ class Player {
         this.velY += GRAVITY;
         this.x += this.velX;
         this.y += this.velY;
-        if (this.y > GAME_HEIGHT + 100) {
+        if (this.y > GAME_HEIGHT + 100 * scaleFactor) {
             currentState = STATE.GAMEOVER;
         }
     }
@@ -265,11 +267,11 @@ class Player {
        
         let bob = 0;
         if (Math.abs(this.velX) > 0.5 && this.grounded) {
-             bob = Math.sin(Date.now() / 100) * 3;
+             bob = Math.sin(Date.now() / 100) * 3 * scaleFactor;
         }
         ctx.fillStyle = "rgba(0,0,0,0.2)";
         ctx.beginPath();
-        ctx.ellipse(drawX + this.width/2, this.y + this.height - 2, 15, 5, 0, 0, Math.PI*2);
+        ctx.ellipse(drawX + this.width/2, this.y + this.height - 2 * scaleFactor, 15 * scaleFactor, 5 * scaleFactor, 0, 0, Math.PI*2);
         ctx.fill();
         if (imgToDraw.complete && imgToDraw.naturalHeight !== 0) {
             ctx.drawImage(imgToDraw, drawX, this.y + bob, this.width, this.height);
@@ -286,20 +288,20 @@ class Platform {
     draw(cameraOffset) {
         ctx.save();
         ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
-        ctx.shadowBlur = 10;
-        ctx.shadowOffsetX = 6;
-        ctx.shadowOffsetY = 6;
+        ctx.shadowBlur = 10 * scaleFactor;
+        ctx.shadowOffsetX = 6 * scaleFactor;
+        ctx.shadowOffsetY = 6 * scaleFactor;
         ctx.fillStyle = "#5086b4";
         ctx.fillRect(this.x - cameraOffset, this.y, this.width, this.height);
         ctx.restore();
         ctx.strokeStyle = "white";
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2 * scaleFactor;
         ctx.beginPath();
         ctx.moveTo(this.x - cameraOffset, this.y);
         ctx.lineTo(this.x - cameraOffset + this.width, this.y);
         ctx.stroke();
        
-        for(let i = this.x; i < this.x + this.width; i+=40) {
+        for(let i = this.x; i < this.x + this.width; i+=40 * scaleFactor) {
              ctx.beginPath();
              ctx.moveTo(i - cameraOffset, this.y);
              ctx.lineTo(i - cameraOffset, this.y + this.height);
@@ -310,9 +312,9 @@ class Platform {
 class Enemy {
     constructor(x, y, range) {
         this.x = x; this.y = y;
-        this.width = 70; this.height = 70;
+        this.width = 70 * scaleFactor; this.height = 70 * scaleFactor;
         this.startX = x; this.range = range;
-        this.speed = 2; this.direction = 1;
+        this.speed = 2 * scaleFactor; this.direction = 1;
         this.markedForDeletion = false;
         this.image = enemyImages[Math.floor(Math.random() * enemyImages.length)];
     }
@@ -330,7 +332,7 @@ class Enemy {
             ctx.fillStyle = Math.random() > 0.5 ? "#E91E63" : "#FF5722";
             ctx.fillRect(drawX, this.y, this.width, this.height);
             ctx.fillStyle = "#FFF";
-            ctx.font = "bold 10px Arial";
+            ctx.font = `bold ${10 * scaleFactor}px Arial`;
             ctx.textAlign = "center";
             ctx.fillText("BRAND", drawX + this.width/2, this.y + this.height/2);
             ctx.textAlign = "left";
@@ -340,7 +342,7 @@ class Enemy {
 class ShriAjabGoal {
     constructor(x, y) {
         this.x = x; this.y = y;
-        this.width = 60; this.height = 40;
+        this.width = 60 * scaleFactor; this.height = 40 * scaleFactor;
     }
    
     draw(cameraOffset) {
@@ -352,17 +354,17 @@ class ShriAjabGoal {
             ctx.fillRect(drawX, this.y, this.width, this.height);
         }
        
-        let logoTopY = this.y - 40;
+        let logoTopY = this.y - 40 * scaleFactor;
         if (winnerImage.complete && winnerImage.naturalHeight !== 0) {
-            ctx.drawImage(winnerImage, drawX - 10, logoTopY, 80, 80);
+            ctx.drawImage(winnerImage, drawX - 10 * scaleFactor, logoTopY, 80 * scaleFactor, 80 * scaleFactor);
         }
         ctx.save();
         ctx.fillStyle = "#FFD700";
-        ctx.font = "bold 16px 'Press Start 2P'";
+        ctx.font = `bold ${16 * scaleFactor}px 'Press Start 2P'`;
         ctx.textAlign = "center";
         ctx.shadowColor = "rgba(0,0,0,0.8)";
         ctx.shadowBlur = 4;
-        ctx.fillText("WINNER", drawX + this.width / 2, logoTopY - 15);
+        ctx.fillText("WINNER", drawX + this.width / 2, logoTopY - 15 * scaleFactor);
         ctx.restore();
     }
 }
@@ -374,10 +376,10 @@ class Decoration {
         ctx.fillStyle = "#A1887F";
         if(this.type === 'arch') {
              ctx.beginPath();
-             ctx.arc(this.x - cameraOffset, this.y, 40, Math.PI, 0);
+             ctx.arc(this.x - cameraOffset, this.y, 40 * scaleFactor, Math.PI, 0);
              ctx.fill();
-             ctx.fillRect(this.x - 40 - cameraOffset, this.y, 10, 60);
-             ctx.fillRect(this.x + 30 - cameraOffset, this.y, 10, 60);
+             ctx.fillRect(this.x - 40 * scaleFactor - cameraOffset, this.y, 10 * scaleFactor, 60 * scaleFactor);
+             ctx.fillRect(this.x + 30 * scaleFactor - cameraOffset, this.y, 10 * scaleFactor, 60 * scaleFactor);
         }
     }
 }
@@ -392,35 +394,35 @@ let goal;
 function initGame() {
     score = 0;
     cameraX = 0;
-    let groundY = GAME_HEIGHT - 160;
+    let groundY = GAME_HEIGHT - controlHeight;
    
-    player = new Player(100, groundY - 150);
+    player = new Player(100 * scaleFactor, groundY - 150 * scaleFactor);
    
     platforms = [
-        new Platform(0, groundY, 1000, 40),
-        new Platform(1100, groundY, 800, 40),
-        new Platform(2000, groundY, 1000, 40),
+        new Platform(0, groundY, 1000 * scaleFactor, 40 * scaleFactor),
+        new Platform(1100 * scaleFactor, groundY, 800 * scaleFactor, 40 * scaleFactor),
+        new Platform(2000 * scaleFactor, groundY, 1000 * scaleFactor, 40 * scaleFactor),
        
-        new Platform(300, groundY - 150, 150, 30),
-        new Platform(700, groundY - 80, 150, 30),
+        new Platform(300 * scaleFactor, groundY - 150 * scaleFactor, 150 * scaleFactor, 30 * scaleFactor),
+        new Platform(700 * scaleFactor, groundY - 80 * scaleFactor, 150 * scaleFactor, 30 * scaleFactor),
        
-        new Platform(500, groundY - 160, 150, 30),
-        new Platform(1200, groundY - 110, 200, 30),
-        new Platform(1800, groundY - 110, 150, 30),
+        new Platform(500 * scaleFactor, groundY - 160 * scaleFactor, 150 * scaleFactor, 30 * scaleFactor),
+        new Platform(1200 * scaleFactor, groundY - 110 * scaleFactor, 200 * scaleFactor, 30 * scaleFactor),
+        new Platform(1800 * scaleFactor, groundY - 110 * scaleFactor, 150 * scaleFactor, 30 * scaleFactor),
        
-        new Platform(1500, groundY - 210, 200, 30),
-        new Platform(2200, groundY - 110, 100, 30),
-        new Platform(2400, groundY - 210, 100, 30),
-        new Platform(2600, groundY - 310, 300, 40)
+        new Platform(1500 * scaleFactor, groundY - 210 * scaleFactor, 200 * scaleFactor, 30 * scaleFactor),
+        new Platform(2200 * scaleFactor, groundY - 110 * scaleFactor, 100 * scaleFactor, 30 * scaleFactor),
+        new Platform(2400 * scaleFactor, groundY - 210 * scaleFactor, 100 * scaleFactor, 30 * scaleFactor),
+        new Platform(2600 * scaleFactor, groundY - 310 * scaleFactor, 300 * scaleFactor, 40 * scaleFactor)
     ];
     enemies = [
-        new Enemy(400, groundY - 70, 200),
-        new Enemy(1200, groundY - 180, 150),
-        new Enemy(1600, groundY - 280, 100),
-        new Enemy(2100, groundY - 70, 300)
+        new Enemy(400 * scaleFactor, groundY - 70 * scaleFactor, 200 * scaleFactor),
+        new Enemy(1200 * scaleFactor, groundY - 180 * scaleFactor, 150 * scaleFactor),
+        new Enemy(1600 * scaleFactor, groundY - 280 * scaleFactor, 100 * scaleFactor),
+        new Enemy(2100 * scaleFactor, groundY - 70 * scaleFactor, 300 * scaleFactor)
     ];
    
-    goal = new ShriAjabGoal(2750, groundY - 350);
+    goal = new ShriAjabGoal(2750 * scaleFactor, groundY - 350 * scaleFactor);
 }
 function resetGame() {
     currentState = STATE.START;
@@ -485,7 +487,7 @@ function update() {
 }
 function drawUI() {
     ctx.fillStyle = "#000";
-    ctx.font = "20px Arial";
+    ctx.font = `${20 * scaleFactor}px Arial`;
     ctx.fillText("Score: " + score, 20, 30);
 }
 function drawOverlay(title, subtitle) {
@@ -494,13 +496,13 @@ function drawOverlay(title, subtitle) {
    
     ctx.fillStyle = "#FFC107";
     ctx.textAlign = "center";
-    ctx.font = "bold 40px Arial";
-    ctx.fillText(title, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 20);
+    ctx.font = `bold ${40 * scaleFactor}px Arial`;
+    ctx.fillText(title, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 20 * scaleFactor);
    
     ctx.fillStyle = "#FFF";
-    ctx.font = "20px Arial";
+    ctx.font = `${20 * scaleFactor}px Arial`;
     // Modified subtitle to include mobile instruction
-    ctx.fillText(subtitle, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30);
+    ctx.fillText(subtitle, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30 * scaleFactor);
     ctx.textAlign = "left";
 }
 function draw() {
