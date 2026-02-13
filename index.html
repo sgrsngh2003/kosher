@@ -54,8 +54,8 @@
                 gap: 10px;
             }
             .control-btn {
-                width: 30px;
-                height: 30px;
+                width: 50px;
+                height: 50px;
                 font-size: 10px;
             }
         }
@@ -67,7 +67,7 @@
         .control-btn {
             width: 50px;
             height: 50px;
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
             border: 2px solid rgba(255, 255, 255, 0.5);
             border-radius: 50%;
             color: white;
@@ -109,7 +109,7 @@
         <div class="control-btn" id="btn-right">▶</div>
     </div>
     <div class="action-btn">
-        <div class="control-btn" id="btn-jump" style="background: rgba(255, 200, 0, 0.3);">▲</div>
+        <div class="control-btn" id="btn-jump" style="background: rgba(255, 200, 0, 0.1);">▲</div>
     </div>
 </div>
 <div id="rotateOverlay">
@@ -152,7 +152,7 @@ window.addEventListener('resize', () => {
 });
 const isMobile = window.innerWidth < 1024;
 const scaleFactor = isMobile ? 0.4 : 1;
-const speedMultiplier = isMobile ? 1.5 : 1;
+const speedMultiplier = isMobile ? 1.8 : 1;
 let controlHeight = isMobile ? 90 : 40;
 const STATE = {
     START: 0,
